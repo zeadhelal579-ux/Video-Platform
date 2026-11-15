@@ -1,0 +1,8 @@
+# Build output and IDE files never belong in the Docker build context:
+# they are huge, change constantly, and would bust the layer cache.
+**/bin/
+**/obj/
+**/.vs/
+**/.vscode/
+**/*.user
+tests/

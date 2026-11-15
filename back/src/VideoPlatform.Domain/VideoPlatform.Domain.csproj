@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    VideoPlatform.Domain
+    This project intentionally has ZERO NuGet package references. Business
+    rules must not know that PostgreSQL, RabbitMQ, or ASP.NET even exist
+    (see ARCHITECTURE.md, section 2.1). Every other project references this
+    one; this one references nothing in the solution.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>VideoPlatform.Domain</RootNamespace>
+    <AssemblyName>VideoPlatform.Domain</AssemblyName>
+  </PropertyGroup>
+
+</Project>

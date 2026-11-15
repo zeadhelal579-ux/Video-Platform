@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    VideoPlatform.Application
+    Depends on Domain only. The single EF Core package below is the
+    ABSTRACTION package (DbSet<T>) — no database provider is referenced
+    here, so this project still doesn't know PostgreSQL exists.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>VideoPlatform.Application</RootNamespace>
+    <AssemblyName>VideoPlatform.Application</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.15" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\VideoPlatform.Domain\VideoPlatform.Domain.csproj" />
+  </ItemGroup>
+
+</Project>

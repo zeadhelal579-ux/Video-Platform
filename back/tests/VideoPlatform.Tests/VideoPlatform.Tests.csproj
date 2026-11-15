@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    VideoPlatform.Tests
+    Unit tests for Domain (entity/status-transition rules), Application
+    (command/query handlers, against an in-memory IAppDbContext fake), and
+    a small Worker test (ResolutionPreset). Deliberately does NOT reference
+    Infrastructure or Api: those pull in PostgreSQL/RabbitMQ/AWS/Identity,
+    which real integration tests would need running services for — out of
+    scope for a fast, dependency-free unit test suite. See the final report
+    for what a follow-up integration-test project should cover.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <RootNamespace>VideoPlatform.Tests</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="10.0.15" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\VideoPlatform.Domain\VideoPlatform.Domain.csproj" />
+    <ProjectReference Include="..\..\src\VideoPlatform.Application\VideoPlatform.Application.csproj" />
+    <ProjectReference Include="..\..\src\VideoPlatform.Worker\VideoPlatform.Worker.csproj" />
+  </ItemGroup>
+
+</Project>

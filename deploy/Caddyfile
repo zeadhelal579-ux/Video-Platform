@@ -1,0 +1,21 @@
+# File: Caddyfile
+# Purpose: Automatic HTTPS in front of the backend. Used by the "https"
+# compose profile:  docker compose --profile https up -d
+# Logic/Approach: Caddy obtains and renews Let's Encrypt certificates by
+# itself. Two public host names are served: the Api (what the Vercel frontend
+# talks to) and the media endpoint (MinIO — the browser uploads to it and plays
+# video from it). Both DNS records must point at this server, and ports 80/443
+# must be open. Caddy adds the X-Forwarded-For / X-Forwarded-Proto headers the
+# Api relies on (real client IP for rate limiting, Secure refresh cookie).
+# {$VAR:default} reads an environment variable passed in by docker-compose.yml.
+
+{$API_DOMAIN:api.localhost} {
+	encode zstd gzip
+	reverse_proxy api:8080
+}
+
+# Only needed with the bundled MinIO ("local-storage" profile). When storage
+# is AWS S3 / R2 behind a CDN, nothing is ever requested from this host name.
+{$MEDIA_DOMAIN:media.localhost} {
+	reverse_proxy minio:9000
+}

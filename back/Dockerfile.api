@@ -1,0 +1,39 @@
+# File: Dockerfile.api
+# Purpose: Builds the ASP.NET Core Api into a small runtime image.
+# Build context: the back/ folder (the root docker-compose.yml passes it).
+# Logic/Approach: Two stages — the SDK image compiles, the much smaller
+# ASP.NET runtime image only runs the published output. The .csproj files are
+# copied first so the slow "dotnet restore" layer is cached until a package changes.
+
+# Change both images together when moving to a newer .NET (also update TargetFramework).
+ARG DOTNET_VERSION=10.0
+
+# ---------- build stage ----------
+FROM mcr.microsoft.com/dotnet/sdk:${DOTNET_VERSION} AS build
+WORKDIR /src
+
+COPY src/VideoPlatform.Domain/VideoPlatform.Domain.csproj src/VideoPlatform.Domain/
+COPY src/VideoPlatform.Application/VideoPlatform.Application.csproj src/VideoPlatform.Application/
+COPY src/VideoPlatform.Infrastructure/VideoPlatform.Infrastructure.csproj src/VideoPlatform.Infrastructure/
+COPY src/VideoPlatform.Api/VideoPlatform.Api.csproj src/VideoPlatform.Api/
+RUN dotnet restore src/VideoPlatform.Api/VideoPlatform.Api.csproj
+
+COPY src/ src/
+RUN dotnet publish src/VideoPlatform.Api/VideoPlatform.Api.csproj \
+    -c Release -o /app/publish --no-restore /p:UseAppHost=false
+
+# ---------- runtime stage ----------
+FROM mcr.microsoft.com/dotnet/aspnet:${DOTNET_VERSION} AS final
+WORKDIR /app
+
+# Port 8080 is never published to the network: Caddy reaches it over the compose
+# network, and docker-compose.yml maps it to the host's loopback interface only.
+ENV ASPNETCORE_HTTP_PORTS=8080 \
+    ASPNETCORE_ENVIRONMENT=Production
+EXPOSE 8080
+
+COPY --from=build /app/publish .
+
+# Run as the non-root "app" user that the official .NET images ship with.
+USER $APP_UID
+ENTRYPOINT ["dotnet", "VideoPlatform.Api.dll"]

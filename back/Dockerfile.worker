@@ -1,0 +1,41 @@
+# File: Dockerfile.worker
+# Purpose: Builds the .NET Worker Service image — the same as the Api image
+# plus the ffmpeg/ffprobe binaries that FFMpegCore drives.
+# Build context: the back/ folder (the root docker-compose.yml passes it).
+# Logic/Approach: The Worker is a generic host with no HTTP endpoints, but it
+# links the ASP.NET Core shared framework through the Infrastructure project,
+# so the "aspnet" runtime image is used (not the plain "runtime" one).
+
+# Change both images together when moving to a newer .NET (also update TargetFramework).
+ARG DOTNET_VERSION=10.0
+
+# ---------- build stage ----------
+FROM mcr.microsoft.com/dotnet/sdk:${DOTNET_VERSION} AS build
+WORKDIR /src
+
+COPY src/VideoPlatform.Domain/VideoPlatform.Domain.csproj src/VideoPlatform.Domain/
+COPY src/VideoPlatform.Application/VideoPlatform.Application.csproj src/VideoPlatform.Application/
+COPY src/VideoPlatform.Infrastructure/VideoPlatform.Infrastructure.csproj src/VideoPlatform.Infrastructure/
+COPY src/VideoPlatform.Worker/VideoPlatform.Worker.csproj src/VideoPlatform.Worker/
+RUN dotnet restore src/VideoPlatform.Worker/VideoPlatform.Worker.csproj
+
+COPY src/ src/
+RUN dotnet publish src/VideoPlatform.Worker/VideoPlatform.Worker.csproj \
+    -c Release -o /app/publish --no-restore /p:UseAppHost=false
+
+# ---------- runtime stage ----------
+FROM mcr.microsoft.com/dotnet/aspnet:${DOTNET_VERSION} AS final
+
+# ffmpeg also brings ffprobe, which the Worker uses to read the source's height.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+ENV DOTNET_ENVIRONMENT=Production
+
+COPY --from=build /app/publish .
+
+# Run as the non-root "app" user; transcoding scratch files go to /tmp, which is world-writable.
+USER $APP_UID
+ENTRYPOINT ["dotnet", "VideoPlatform.Worker.dll"]

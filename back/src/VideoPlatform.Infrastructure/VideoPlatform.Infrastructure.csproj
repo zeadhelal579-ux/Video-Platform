@@ -1,0 +1,47 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    VideoPlatform.Infrastructure
+    Every interface Application declares gets exactly one real
+    implementation here (ARCHITECTURE.md section 2.3). References
+    Application (and, transitively, Domain).
+
+    FrameworkReference note: this class library needs the ASP.NET Core shared
+    framework to see Microsoft.Extensions.Configuration.Binder
+    (GetSection(...).Get<T>()) and the hosting/logging abstractions that the
+    Api and Worker both provide at run time. A Web SDK project
+    (VideoPlatform.Api) already gets it implicitly; a plain class library
+    must declare it.
+
+    Keep System.IdentityModel.Tokens.Jwt aligned with the Api's JwtBearer dependencies.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>VideoPlatform.Infrastructure</RootNamespace>
+    <AssemblyName>VideoPlatform.Infrastructure</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.15" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.15">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.2" />
+    <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.15" />
+    <PackageReference Include="MassTransit.RabbitMQ" Version="8.3.1" />
+    <PackageReference Include="AWSSDK.S3" Version="3.7.402.3" />
+    <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.19.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\VideoPlatform.Application\VideoPlatform.Application.csproj" />
+  </ItemGroup>
+
+</Project>

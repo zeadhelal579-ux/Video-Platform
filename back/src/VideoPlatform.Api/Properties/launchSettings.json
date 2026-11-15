@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json.schemastore.org/launchsettings.json",
+  "//": "Not part of the original ARCHITECTURE.md file tree. Added because no file here pinned which port `dotnet run` binds to, which is exactly the port the frontend's VITE_API_BASE_URL must match. HTTP only, on purpose: this project documents no `dotnet dev-certs https --trust` step anywhere (README.md, REPORT.md), so local dev runs over plain HTTP — see the Secure-cookie comment in Endpoints/AuthEndpoints.cs, which is written to work correctly either way.",
+  "profiles": {
+    "http": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": false,
+      "applicationUrl": "http://localhost:5000",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      }
+    }
+  }
+}

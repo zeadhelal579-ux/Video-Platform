@@ -1,0 +1,214 @@
+# File: docker-compose.yml
+# Purpose: The BACKEND of the platform on one machine — PostgreSQL, RabbitMQ,
+# the Api, the Worker (FFmpeg) and either bundled MinIO or your own S3. The
+# frontend is NOT part of this file: it is a separate project, deployed on
+# Vercel (see DEPLOYMENT.md). Configuration comes from the .env file next to
+# this one (copy .env.example to .env and fill it in).
+# Usage:   docker compose up -d --build
+# Logic/Approach: Postgres, RabbitMQ and the Api live on the private compose
+# network. A browser (or Vercel's servers) must reach the Api and the object
+# storage over HTTPS, because a Vercel site is served over HTTPS and browsers
+# block calls from it to plain-http addresses (mixed content). The "https"
+# profile adds Caddy, which gets certificates by itself and serves two public
+# names: API_DOMAIN (the Api) and MEDIA_DOMAIN (MinIO). Profiles:
+#   local-storage  MinIO + its one-shot bucket setup  (default in .env.example)
+#   https          Caddy with automatic HTTPS in front of the Api and MinIO
+# Set COMPOSE_PROFILES in .env, e.g. COMPOSE_PROFILES=local-storage,https
+name: videoplatform
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: videoplatform
+      POSTGRES_USER: videoplatform
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U videoplatform -d videoplatform"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: videoplatform
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD in .env}
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+      - ./deploy/rabbitmq.conf:/etc/rabbitmq/conf.d/20-videoplatform.conf:ro
+    ports:
+      # Management UI, reachable from this machine only (use an SSH tunnel remotely).
+      - "127.0.0.1:15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 20
+
+  # ---- Object storage on this machine (profile: local-storage) ----
+  # The MinIO community edition is no longer maintained upstream (see
+  # DEPLOYMENT.md). It is fine for a single-server setup or a demo; for real
+  # production use AWS S3 / Cloudflare R2 instead and drop this profile.
+  minio:
+    image: ${MINIO_IMAGE:-minio/minio:latest}
+    profiles: ["local-storage"]
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY:?Set S3_ACCESS_KEY in .env}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:?Set S3_SECRET_KEY in .env}
+    ports:
+      # Browsers upload to and stream from this port directly (pre-signed URLs)
+      # when you run WITHOUT the https profile. With https, Caddy reaches MinIO
+      # over the compose network and this port should be closed in the firewall.
+      - "9000:9000"
+      # Admin console, this machine only.
+      - "127.0.0.1:9001:9001"
+    volumes:
+      - minio-data:/data
+
+  # One-shot job: creates the bucket and makes ONLY the HLS output public
+  # (videos/<id>/hls/...). The raw uploads (videos/<id>/original/...) stay private.
+  minio-init:
+    image: ${MINIO_MC_IMAGE:-minio/mc:latest}
+    profiles: ["local-storage"]
+    restart: "no"
+    depends_on:
+      - minio
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY:?Set S3_ACCESS_KEY in .env}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:?Set S3_SECRET_KEY in .env}
+      BUCKET: ${S3_BUCKET:-videoplatform}
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        set -e
+        until mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD" >/dev/null 2>&1; do
+          echo "waiting for minio..."
+          sleep 2
+        done
+        mc mb --ignore-existing "local/$$BUCKET"
+        cat > /tmp/policy.json <<POLICY
+        {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": { "AWS": ["*"] },
+              "Action": ["s3:GetObject"],
+              "Resource": ["arn:aws:s3:::$$BUCKET/videos/*/hls/*"]
+            }
+          ]
+        }
+        POLICY
+        mc anonymous set-json /tmp/policy.json "local/$$BUCKET"
+        echo "Bucket $$BUCKET is ready."
+
+  api:
+    build:
+      context: ./back
+      dockerfile: Dockerfile.api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    ports:
+      # Loopback only: lets a tunnel or a proxy running on THIS machine (for
+      # example cloudflared) reach the Api when you do not use the bundled
+      # Caddy. Never published to the network — the Api trusts the
+      # X-Forwarded-* headers it receives (see Program.cs).
+      - "127.0.0.1:${API_PORT:-8080}:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__DefaultConnection: "Host=postgres;Port=5432;Database=videoplatform;Username=videoplatform;Password=${POSTGRES_PASSWORD}"
+      RabbitMq__Host: rabbitmq
+      RabbitMq__Username: videoplatform
+      RabbitMq__Password: ${RABBITMQ_PASSWORD}
+      Storage__ServiceUrl: ${S3_ENDPOINT_INTERNAL-http://minio:9000}
+      Storage__PublicServiceUrl: ${S3_ENDPOINT_PUBLIC-http://localhost:9000}
+      Storage__Region: ${S3_REGION:-us-east-1}
+      Storage__BucketName: ${S3_BUCKET:-videoplatform}
+      Storage__AccessKey: ${S3_ACCESS_KEY:?Set S3_ACCESS_KEY in .env}
+      Storage__SecretKey: ${S3_SECRET_KEY:?Set S3_SECRET_KEY in .env}
+      Storage__PublicBaseUrl: ${MEDIA_BASE_URL-http://localhost:9000/videoplatform}
+      Storage__ForcePathStyle: ${S3_FORCE_PATH_STYLE:-true}
+      Jwt__SigningKey: ${JWT_SIGNING_KEY:?Set JWT_SIGNING_KEY in .env (at least 32 random characters)}
+      # Origin(s) of the frontend allowed to call this Api with credentials (CORS).
+      # Several can be listed, comma-separated. Not used in the Vercel "/api" rewrite setup.
+      Frontend__Origin: ${APP_URL:-http://localhost:5173}
+      # How the browser treats the refresh cookie: Strict (default) / Lax / None. See DEPLOYMENT.md.
+      Auth__RefreshCookieSameSite: ${AUTH_COOKIE_SAMESITE:-Strict}
+      RateLimiting__AuthPerMinute: ${AUTH_RATE_LIMIT_PER_MINUTE:-20}
+    healthcheck:
+      # The aspnet image has bash but no curl: speak HTTP over bash's /dev/tcp.
+      test:
+        - CMD
+        - bash
+        - -c
+        - 'exec 3<>/dev/tcp/127.0.0.1/8080 && printf "GET /api/health HTTP/1.0\r\nHost: localhost\r\n\r\n" >&3 && head -n1 <&3 | grep -q " 200 "'
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  worker:
+    build:
+      context: ./back
+      dockerfile: Dockerfile.worker
+    restart: unless-stopped
+    # A transcode in progress gets time to stop cleanly before the container is killed.
+    stop_grace_period: 1m
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      DOTNET_ENVIRONMENT: Production
+      ConnectionStrings__DefaultConnection: "Host=postgres;Port=5432;Database=videoplatform;Username=videoplatform;Password=${POSTGRES_PASSWORD}"
+      RabbitMq__Host: rabbitmq
+      RabbitMq__Username: videoplatform
+      RabbitMq__Password: ${RABBITMQ_PASSWORD}
+      Storage__ServiceUrl: ${S3_ENDPOINT_INTERNAL-http://minio:9000}
+      Storage__Region: ${S3_REGION:-us-east-1}
+      Storage__BucketName: ${S3_BUCKET:-videoplatform}
+      Storage__AccessKey: ${S3_ACCESS_KEY:?Set S3_ACCESS_KEY in .env}
+      Storage__SecretKey: ${S3_SECRET_KEY:?Set S3_SECRET_KEY in .env}
+      Storage__ForcePathStyle: ${S3_FORCE_PATH_STYLE:-true}
+      Worker__MaxConcurrentJobs: ${WORKER_MAX_CONCURRENT_JOBS:-1}
+      Worker__TranscodeTimeoutMinutes: ${WORKER_TIMEOUT_MINUTES:-180}
+
+  # ---- Automatic HTTPS (profile: https) ----
+  # Serves API_DOMAIN -> the Api and MEDIA_DOMAIN -> MinIO. Required whenever
+  # the frontend runs on Vercel, unless HTTPS is provided some other way.
+  caddy:
+    image: caddy:2-alpine
+    profiles: ["https"]
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      API_DOMAIN: ${API_DOMAIN:-api.localhost}
+      MEDIA_DOMAIN: ${MEDIA_DOMAIN:-media.localhost}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  postgres-data:
+  rabbitmq-data:
+  minio-data:
+  caddy-data:
+  caddy-config:

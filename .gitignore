@@ -1,0 +1,23 @@
+# .NET and test output
+bin/
+obj/
+[Tt]est[Rr]esult*/
+*.trx
+*.coverage
+*.coveragexml
+
+# Local configuration
+.env
+.env.*
+!.env.example
+appsettings.*.local.json
+*.local
+
+# Editor and OS
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+.DS_Store
+Thumbs.db

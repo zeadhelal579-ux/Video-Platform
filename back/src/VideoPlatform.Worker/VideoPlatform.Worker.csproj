@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk.Worker">
+
+  <!--
+    VideoPlatform.Worker
+    A .NET Generic Host (no HTTP endpoints). Consumes
+    VideoProcessingRequested, runs FFmpeg, uploads HLS output
+    (ARCHITECTURE.md section 2.5).
+
+    FrameworkReference note (see Infrastructure.csproj): the Worker
+    references Infrastructure, which needs the ASP.NET Core shared framework
+    for its configuration/hosting abstractions. It is declared explicitly
+    here too, rather than relying purely on transitive FrameworkReference
+    propagation, since the Worker is not itself a Web SDK project. At run
+    time that means the "aspnet" container image, not the plain "runtime" one.
+
+    FFmpeg itself is NOT a NuGet package: FFMpegCore only drives the
+    ffmpeg/ffprobe binaries, which must be installed on the machine (the
+    Docker image does it) or pointed to with FFmpeg:BinaryFolder.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>VideoPlatform.Worker</RootNamespace>
+    <AssemblyName>VideoPlatform.Worker</AssemblyName>
+    <UserSecretsId>videoplatform-worker-secrets</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="FFMpegCore" Version="5.1.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\VideoPlatform.Application\VideoPlatform.Application.csproj" />
+    <ProjectReference Include="..\VideoPlatform.Infrastructure\VideoPlatform.Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>

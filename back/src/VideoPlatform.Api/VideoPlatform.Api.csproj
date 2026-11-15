@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <!--
+    VideoPlatform.Api
+    Maps HTTP routes to Application Commands/Queries and hosts
+    ASP.NET Core Identity + JWT authentication (ARCHITECTURE.md section 2.4).
+    Sdk.Web already brings the full ASP.NET Core shared framework, so no
+    explicit FrameworkReference is needed here (unlike Infrastructure).
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>VideoPlatform.Api</RootNamespace>
+    <AssemblyName>VideoPlatform.Api</AssemblyName>
+    <UserSecretsId>videoplatform-api-secrets</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.15" />
+
+    <!--
+      The EF Core command-line tools ("dotnet ef migrations add" and friends)
+      refuse to run unless the STARTUP project itself references the Design
+      package. PrivateAssets=all keeps it out of the published output.
+    -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.15">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\VideoPlatform.Application\VideoPlatform.Application.csproj" />
+    <ProjectReference Include="..\VideoPlatform.Infrastructure\VideoPlatform.Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>
